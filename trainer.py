@@ -4,7 +4,7 @@ import numpy as np
 from metrics import multiclass_accuracy
 from module import Module
 from optim import Optimizer
-from loss import Loss
+from loss import *
 import random
 
 class Dataset:
@@ -23,14 +23,16 @@ class Dataset:
 class Trainer:
     def __init__(self,
                  model: Module,
-                 loss: Loss,
+                #  loss: Loss,
                  dataset: Dataset,
                  optimizer: Optimizer,
                  num_epochs: int = 20,
                  batch_size: int = 20,
-                 learning_rate_decay: float = 1.0) -> None:
+                 learning_rate_decay: float = 1.0,
+                 loss = 'mse') -> None:
         assert isinstance(model, Module)
-        assert isinstance(loss, Loss)
+        assert isinstance(loss, str)
+        # assert isinstance(loss, Loss)
         assert isinstance(dataset, Dataset)
         assert isinstance(optimizer, Optimizer)
         assert isinstance(num_epochs, int)
@@ -39,7 +41,8 @@ class Trainer:
 
         self.model:         Module = model
         self.dataset:       Dataset = dataset
-        self.loss:          Loss = loss
+        self.loss:          str = loss
+        # self.loss:          Loss = loss
         self.optimizer:     Optimizer = optimizer
         self.num_epochs:    int = num_epochs
         self.batch_size:    int = batch_size
@@ -83,13 +86,22 @@ class Trainer:
                 batch = self.dataset.train_X[batch_indices]
                 target_index = self.dataset.train_y[batch_indices]
                 batch_loss = 0
+                d_loss_value_accum = 0
                 for i, sample in enumerate(batch):
                     pred = self.model.forward(sample)
                     pred = pred.reshape(pred.shape[-2], pred.shape[-1])
-                    loss_value, d_loss_value = self.loss.compute(pred, target_index[i])
+                    if self.loss == 'mse':
+                        loss_value, d_loss_value = MSELoss().compute(pred, target_index[i])
+                    else:
+                        classes_num = target_index[i].shape[-1]
+                        target_indices = target_index[i].argmax(axis=-1)
+                        pred = pred.reshape(-1, classes_num)
+                        loss_value, d_loss_value = CrossEntropy().compute(pred, target_indices)
+                    d_loss_value_accum = d_loss_value_accum + d_loss_value
                     batch_loss += loss_value
-                    self.model.backward(d_loss_value)
-                batch_loss = batch_loss
+                d_loss_value_accum = d_loss_value_accum / len(batch)
+                self.model.backward(d_loss_value_accum)
+                batch_loss = batch_loss / len(batch)
                 self.optimizer.step()
 
                 batch_losses.append(batch_loss)
@@ -109,18 +121,19 @@ class Trainer:
                 print("Loss: %f, Train accuracy: %f, val accuracy: %f" %
                       (avg_loss, train_accuracy, val_accuracy))
 
-                rand_index = random.randint(0, self.dataset.val_y.shape[0] - 1)
-                testX = self.dataset.val_X[rand_index]
-                testY = self.dataset.val_y[rand_index]
-                test_num = testX.argmax(axis=-1).ravel()
-                srtd = np.eye(testX.shape[-1])[np.sort(test_num)]
-                predicted = self.model.predict(testX).ravel()
-                predicted_forward = self.model.forward(testX)
-                predicted_forward = predicted_forward.reshape(predicted_forward.shape[-2], predicted_forward.shape[-1])
-                predicted_onehot = np.eye(testX.shape[-1])[predicted_forward.argmax(axis=-1)]
-                print("unsorted: ", test_num)
-                print("sorted:   ", np.sort(test_num))
-                print("predicted:", predicted)
+                # rand_index = random.randint(0, self.dataset.val_y.shape[0] - 1)
+                # testX = self.dataset.val_X[rand_index]
+                # testY = self.dataset.val_y[rand_index]
+                # test_num = testX.argmax(axis=-1).ravel()
+                # srtd = np.eye(testX.shape[-1])[np.sort(test_num)]
+                # predicted = self.model.predict(testX).ravel()
+                # predicted_forward = self.model.forward(testX)
+                # predicted_forward = predicted_forward.reshape(predicted_forward.shape[-2], predicted_forward.shape[-1])
+                # predicted_onehot = np.eye(testX.shape[-1])[predicted_forward.argmax(axis=-1)]
+                # print("unsorted: ", test_num)
+                # print("sorted:   ", np.sort(test_num))
+                # print("predicted:", predicted)
+
                 # print('actual onehot', srtd, sep='\n')
                 # print('label        ', testY, sep='\n')
                 # print('predicted', predicted_forward, sep='\n')
