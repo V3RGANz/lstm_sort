@@ -3,4 +3,5 @@
 ## JetBrains internship test assignment solution
 
 **pytorch baseline - autoencoder.ipynb**
+
 **solution - LSTM Sorter.ipynb**
